@@ -1,8 +1,9 @@
 {
-  "name": "whisper-x-extension",
+  "name": "whisper-x-downloader",
   "version": "1.0.0",
-  "description": "A TypeScript extension for managing OpenAI Whisper speech-to-text models",
-  "main": "dist/index.js",
+  "description": "Download and manage Whisper speech-to-text models",
+  "displayName": "Whisper Model Downloader",
+  "main": "dist/index.cjs",
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.js",
