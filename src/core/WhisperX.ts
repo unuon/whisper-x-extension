@@ -1,29 +1,30 @@
 import path from 'path';
 import { execSync } from 'child_process';
-import { existsSync, readdirSync, statSync } from 'fs';
+import { existsSync, readdirSync, statSync, unlinkSync } from 'fs';
+import os from 'os';
 import type { WhisperModelName } from '../utils/types.js';
 
 export class WhisperX {
+  private baseDirectory: string;
+
+  constructor(baseDirectory?: string) {
+    // Use provided directory or default to current working directory
+    this.baseDirectory = baseDirectory || process.cwd();
+  }
+
   isModelInstalled(modelName: WhisperModelName): boolean {
     const modelPath = this.getModelPath(modelName);
     return existsSync(modelPath);
   }
 
   getModelPath(modelName: WhisperModelName): string {
-    const modelsDir = path.join(
-      process.cwd(),
-      'node_modules',
-      'nodejs-whisper',
-      'cpp',
-      'whisper.cpp',
-      'models'
-    );
+    const modelsDir = this.getModelsDirectory();
     return path.join(modelsDir, `ggml-${modelName}.bin`);
   }
 
   getModelsDirectory(): string {
     return path.join(
-      process.cwd(),
+      this.baseDirectory,
       'node_modules',
       'nodejs-whisper',
       'cpp',
@@ -42,10 +43,24 @@ export class WhisperX {
         return true;
       }
 
-      // Download directly using the download script with model name as argument
       const modelsDir = this.getModelsDirectory();
-      const command = `bash download-ggml-model.sh ${modelName}`;
+      const isWindows = os.platform() === 'win32';
       
+      let command: string;
+      let shellOption: string | boolean;
+      
+      if (isWindows) {
+        // Windows: Use cmd.exe to run the batch script
+        const scriptPath = path.join(modelsDir, 'download-ggml-model.cmd');
+        command = `download-ggml-model.cmd ${modelName}`;
+        shellOption = 'cmd.exe';
+      } else {
+        // Linux/Mac: Use bash to run the shell script
+        command = `bash download-ggml-model.sh ${modelName}`;
+        shellOption = '/bin/bash';
+      }
+      
+      console.log(`[WhisperX] Platform: ${isWindows ? 'Windows' : 'Unix-like'}`);
       console.log(`[WhisperX] Starting download of ${modelName}...`);
       console.log(`[WhisperX] This may take several minutes depending on model size`);
       console.log(`[WhisperX] Progress will be shown below:`);
@@ -54,7 +69,7 @@ export class WhisperX {
       execSync(command, { 
         stdio: 'inherit',
         cwd: modelsDir,
-        shell: '/bin/bash'
+        shell: shellOption
       });
 
       // Verify the download was successful
@@ -83,7 +98,7 @@ export class WhisperX {
       }
 
       console.log(`[WhisperX] Deleting model: ${modelName}`);
-      execSync(`rm -f "${modelPath}"`, { stdio: 'inherit' });
+      unlinkSync(modelPath);
       
       console.log(`[WhisperX] Successfully deleted model: ${modelName}`);
       return true;

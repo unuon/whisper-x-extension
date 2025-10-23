@@ -11,6 +11,25 @@ export * from './utils/whisper_models.js';
 // Default export for convenience
 export default WhisperX;
 
+// Global config for base directory
+let globalBaseDirectory: string | undefined;
+
+/**
+ * Set the base directory for Whisper models
+ * This should be called once during extension initialization
+ */
+export function setBaseDirectory(directory: string) {
+    globalBaseDirectory = directory;
+    console.log(`[WhisperX] Base directory set to: ${directory}`);
+}
+
+/**
+ * Get the configured base directory
+ */
+export function getBaseDirectory(): string | undefined {
+    return globalBaseDirectory;
+}
+
 /**
  * Get information about a model (for extension use)
  */
@@ -20,7 +39,7 @@ async function getModelInfo(e: any, modelName: WhisperModelName) {
     try {
         console.log(`[WhisperX] Getting info for model: ${modelName}`);
         
-        const whisperX = new WhisperX();
+        const whisperX = new WhisperX(globalBaseDirectory);
         const isInstalled = whisperX.isModelInstalled(modelName);
         const modelPath = whisperX.getModelPath(modelName);
         
@@ -80,7 +99,7 @@ async function listInstalledModels(e: any) {
     try {
         console.log(`[WhisperX] Listing installed models`);
         
-        const whisperX = new WhisperX();
+        const whisperX = new WhisperX(globalBaseDirectory);
         const installed = whisperX.getInstalledModelsInfo();
         
         return {
@@ -143,7 +162,7 @@ async function downloadModelInternal(
             },
         });
 
-        const whisperX = new WhisperX();
+        const whisperX = new WhisperX(globalBaseDirectory);
         
         // Check if already installed
         if (whisperX.isModelInstalled(modelName)) {
@@ -212,7 +231,7 @@ async function deleteModel(e: any, args: { modelName: WhisperModelName }) {
     try {
         console.log(`[WhisperX] Delete request: ${modelName}`);
         
-        const whisperX = new WhisperX();
+        const whisperX = new WhisperX(globalBaseDirectory);
         
         // Check if installed
         if (!whisperX.isModelInstalled(modelName)) {
@@ -258,7 +277,17 @@ async function deleteModel(e: any, args: { modelName: WhisperModelName }) {
     }
 }
 
-export function main({ events, channels, electron: { ipcMain } }: any) {
+export function main({ events, channels, electron: { ipcMain }, api }: any) {
+    // Set base directory from API if available
+    if (api?.getAppPath) {
+        try {
+            const appPath = api.getAppPath();
+            setBaseDirectory(appPath);
+        } catch (error) {
+            console.warn('[WhisperX] Could not get app path, using process.cwd()');
+        }
+    }
+
     events.on("whisperx:getModelInfo", getModelInfo, -10);
     events.on("whisperx:listAvailable", listAvailableModels, -10);
     events.on("whisperx:listInstalled", listInstalledModels, -10);
@@ -267,7 +296,7 @@ export function main({ events, channels, electron: { ipcMain } }: any) {
 
     ipcMain.handle(channels.register("whisperx:getModelInfo"), async (e: any, modelName: WhisperModelName) => {
         try {
-            const whisperX = new WhisperX();
+            const whisperX = new WhisperX(globalBaseDirectory);
             const isInstalled = whisperX.isModelInstalled(modelName);
             const modelPath = whisperX.getModelPath(modelName);
             
@@ -314,7 +343,7 @@ export function main({ events, channels, electron: { ipcMain } }: any) {
 
     ipcMain.handle(channels.register("whisperx:listInstalled"), async () => {
         try {
-            const whisperX = new WhisperX();
+            const whisperX = new WhisperX(globalBaseDirectory);
             const installed = whisperX.getInstalledModelsInfo();
             return {
                 success: true,
@@ -332,7 +361,7 @@ export function main({ events, channels, electron: { ipcMain } }: any) {
     ipcMain.handle(channels.register("whisperx:downloadModel"), async (e: any, modelName: WhisperModelName) => {
         try {
             console.log(`[WhisperX] IPC download request: ${modelName}`);
-            const whisperX = new WhisperX();
+            const whisperX = new WhisperX(globalBaseDirectory);
             
             // Check if already installed
             if (whisperX.isModelInstalled(modelName)) {
@@ -373,7 +402,7 @@ export function main({ events, channels, electron: { ipcMain } }: any) {
     ipcMain.handle(channels.register("whisperx:deleteModel"), async (e: any, modelName: WhisperModelName) => {
         try {
             console.log(`[WhisperX] IPC delete request: ${modelName}`);
-            const whisperX = new WhisperX();
+            const whisperX = new WhisperX(globalBaseDirectory);
             
             // Check if installed
             if (!whisperX.isModelInstalled(modelName)) {
