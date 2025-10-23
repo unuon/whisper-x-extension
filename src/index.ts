@@ -258,12 +258,156 @@ async function deleteModel(e: any, args: { modelName: WhisperModelName }) {
     }
 }
 
-export function main({ events }: { events: any }) {
+export function main({ events, channels, electron: { ipcMain } }: any) {
     events.on("whisperx:getModelInfo", getModelInfo, -10);
     events.on("whisperx:listAvailable", listAvailableModels, -10);
     events.on("whisperx:listInstalled", listInstalledModels, -10);
     events.on("whisperx:downloadModel", downloadModel, -10);
     events.on("whisperx:deleteModel", deleteModel, -10);
+
+    ipcMain.handle(channels.register("whisperx:getModelInfo"), async (e: any, modelName: WhisperModelName) => {
+        try {
+            const whisperX = new WhisperX();
+            const isInstalled = whisperX.isModelInstalled(modelName);
+            const modelPath = whisperX.getModelPath(modelName);
+            
+            let sizeInfo = null;
+            if (isInstalled) {
+                const size = whisperX.getModelSize(modelName);
+                sizeInfo = size ? whisperX.formatSize(size) : null;
+            }
+
+            return {
+                success: true,
+                data: {
+                    modelName,
+                    isInstalled,
+                    path: modelPath,
+                    size: sizeInfo,
+                },
+            };
+        } catch (error: any) {
+            console.error('[WhisperX] Error getting model info:', error);
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    });
+
+    // List all available models
+    ipcMain.handle(channels.register("whisperx:listAvailable"), async () => {
+        try {
+            const { WHISPER_MODELS } = await import('./utils/whisper_models.js');
+            return {
+                success: true,
+                models: WHISPER_MODELS,
+            };
+        } catch (error: any) {
+            console.error('[WhisperX] Error listing available models:', error);
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    });
+
+    ipcMain.handle(channels.register("whisperx:listInstalled"), async () => {
+        try {
+            const whisperX = new WhisperX();
+            const installed = whisperX.getInstalledModelsInfo();
+            return {
+                success: true,
+                models: installed,
+            };
+        } catch (error: any) {
+            console.error('[WhisperX] Error listing installed models:', error);
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    });
+
+    ipcMain.handle(channels.register("whisperx:downloadModel"), async (e: any, modelName: WhisperModelName) => {
+        try {
+            console.log(`[WhisperX] IPC download request: ${modelName}`);
+            const whisperX = new WhisperX();
+            
+            // Check if already installed
+            if (whisperX.isModelInstalled(modelName)) {
+                const size = whisperX.getModelSize(modelName);
+                return {
+                    success: true,
+                    alreadyInstalled: true,
+                    message: `Model ${modelName} is already installed`,
+                    size: size ? whisperX.formatSize(size) : null,
+                };
+            }
+
+            // Download the model
+            const success = await whisperX.downloadModel(modelName);
+            
+            if (success) {
+                const size = whisperX.getModelSize(modelName);
+                return {
+                    success: true,
+                    message: `Model ${modelName} downloaded successfully`,
+                    size: size ? whisperX.formatSize(size) : null,
+                };
+            } else {
+                return {
+                    success: false,
+                    error: 'Download failed',
+                };
+            }
+        } catch (error: any) {
+            console.error('[WhisperX] Error downloading model:', error);
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    });
+
+    ipcMain.handle(channels.register("whisperx:deleteModel"), async (e: any, modelName: WhisperModelName) => {
+        try {
+            console.log(`[WhisperX] IPC delete request: ${modelName}`);
+            const whisperX = new WhisperX();
+            
+            // Check if installed
+            if (!whisperX.isModelInstalled(modelName)) {
+                return {
+                    success: false,
+                    notFound: true,
+                    message: `Model ${modelName} is not installed`,
+                };
+            }
+
+            // Delete the model
+            const success = await whisperX.deleteModel(modelName);
+            
+            if (success) {
+                return {
+                    success: true,
+                    message: `Model ${modelName} deleted successfully`,
+                };
+            } else {
+                return {
+                    success: false,
+                    error: 'Failed to delete model',
+                };
+            }
+        } catch (error: any) {
+            console.error('[WhisperX] Error deleting model:', error);
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    });
+
+    console.log('[WhisperX] Extension initialized with event handlers and IPC handlers');
 }
 
 export { 
