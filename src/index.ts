@@ -322,14 +322,17 @@ function registerIpcHandlers(ipcMain: any, channels: any) {
 }
 
 export function main({ events, channels, electron: { ipcMain }, api }: any) {
-    if (api?.getAppPath) {
-        try {
-            const appPath = api.getAppPath();
-            setBaseDirectory(appPath);
-        } catch (error) {
-            console.warn('[WhisperX] Could not get app path, using process.cwd()');
-        }
-    }
+    // Set base directory to the extension's own directory
+    // Use __dirname to get the current extension's directory
+    const extensionPath = __dirname;
+    
+    // Navigate up from dist directory to extension root
+    const extensionRoot = extensionPath.replace(/[\\/]dist$/, '');
+    
+    console.log(`[WhisperX] Extension path: ${extensionPath}`);
+    console.log(`[WhisperX] Extension root: ${extensionRoot}`);
+    
+    setBaseDirectory(extensionRoot);
 
     events.on("whisperx:getModelInfo", getModelInfo, -10);
     events.on("whisperx:listAvailable", listAvailableModels, -10);
